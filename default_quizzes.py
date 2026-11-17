@@ -3,6 +3,7 @@
 
 from quiz import Quiz
 
+
 def create_default_quizzes():
     """기본 제공 퀴즈 객체의 목록을 생성한다."""
     return [
