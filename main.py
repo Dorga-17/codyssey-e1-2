@@ -1,5 +1,6 @@
 """E1-2 퀴즈 게임의 실행 시작점."""
 
+
 from quiz_game import QuizGame
 
 def main():
@@ -9,4 +10,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-    
