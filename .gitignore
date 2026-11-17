@@ -1,0 +1,16 @@
+# Python 캐시 파일
+__pycache__/
+*.py[cod]
+
+# Python 가상환경
+.venv/
+venv/
+
+# 개발 도구 임시 파일
+.pytest_cache/
+
+# 개인 환경 설정 및 비밀 정보
+.env
+
+# 손상된 저장 파일의 복구용 백업
+state.corrupt-*.json
