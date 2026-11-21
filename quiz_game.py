@@ -2,6 +2,8 @@
 
 
 import random
+import json
+from pathlib import Path
 from datetime import datetime
 from default_quizzes import create_default_quizzes
 from quiz import Quiz
@@ -15,6 +17,7 @@ class QuizGame:
         self.high_score = None
         self.play_history = []
         self.next_user_quiz_id = 1
+        self.state_file = Path(__file__).resolve().parent / "state.json"
 
 
     def show_menu(self):
@@ -292,6 +295,197 @@ class QuizGame:
                 print(f"    실제 정답 : {item['correct_answer']}번")
                 print(f"    힌트 사용 : {item['hints_used']}개")
                 print(f"    획득 점수 : {item['points']}점")
+
+
+    def save_state(self):
+        """사용자 퀴즈와 플레이 기록을 JSON 파일에 저장한다."""
+        state = {
+            "user_quizzes": [
+                quiz.to_dict()
+                for quiz in self.quizzes
+                if not quiz.is_default
+            ],
+            "high_score": self.high_score,
+            "play_history": self.play_history,
+            "next_user_quiz_id": self.next_user_quiz_id
+        }
+
+        try:
+            json_text = json.dumps(state, ensure_ascii=False, indent=2)
+            self.state_file.write_text(json_text, encoding="utf-8")
+        except (OSError, TypeError, ValueError) as error:
+            print(f"게임 저장 중 오류가 발생했습니다: {error}")
+            return False
+
+        print("게임 데이터가 state.json에 저장되었습니다.")
+        return True
+
+
+    def load_state(self):
+        """state.json에서 사용자 퀴즈와 플레이 기록을 불러온다."""
+        if not self.state_file.exists():
+            print("저장된 게임 데이터가 없어 기본 상태로 시작합니다.")
+            return False
+        try:
+            state = json.loads(
+                self.state_file.read_text(encoding="utf-8")
+            )
+            user_quizzes_data = state["user_quizzes"]
+            if not isinstance(user_quizzes_data, list):
+                raise ValueError("사용자 퀴즈 데이터는 목록이어야 합니다.")
+            loaded_quizzes = []
+            seen_ids = set()
+            for quiz_data in user_quizzes_data:
+                if not isinstance(quiz_data, dict):
+                    raise ValueError("퀴즈 데이터는 딕셔너리여야 합니다.")
+                required_keys = {"id", "question", "choices", "answer", "hints", "is_default"}
+                if not required_keys.issubset(quiz_data):
+                    raise ValueError("사용자 퀴즈의 필수 항목이 누락되었습니다.")
+                quiz_id = quiz_data["id"]
+                if (
+                    not isinstance(quiz_id, str)
+                    or not quiz_id.startswith("user-")
+                    or not quiz_id[5:].isdigit()
+                    or int(quiz_id[5:]) < 1
+                    or quiz_id != f"user-{int(quiz_id[5:])}"
+                    or quiz_id in seen_ids
+                ):
+                    raise ValueError("사용자 문제 ID가 잘못되었거나 중복되었습니다.")
+
+                if quiz_data["is_default"] is not False:
+                    raise ValueError("사용자 문제의 유형이 올바르지 않습니다.")
+                question = quiz_data["question"]
+                if not isinstance(question, str) or not question.strip():
+                    raise ValueError("문제 내용이 올바르지 않습니다.")
+                choices = quiz_data["choices"]
+                if (
+                    not isinstance(choices, list)
+                    or len(choices) != 4
+                    or any(not isinstance(choice, str) or not choice.strip() for choice in choices)
+                ):
+                    raise ValueError("선택지는 내용이 있는 문자열 4개여야 합니다.")
+                answer = quiz_data["answer"]
+                if type(answer) is not int or not 1 <= answer <= 4:
+                    raise ValueError("정답 번호는 1부터 4까지의 정수여야 합니다.")
+                hints = quiz_data["hints"]
+                if (
+                    not isinstance(hints, list)
+                    or len(hints) > 2
+                    or any(not isinstance(hint, str) or not hint.strip() for hint in hints)
+                ):
+                    raise ValueError("힌트는 내용이 있는 문자열 최대 2개여야 합니다.")
+                loaded_quiz = Quiz(
+                    quiz_id=quiz_id,
+                    question=question,
+                    choices=choices,
+                    answer=answer,
+                    hints=hints,
+                    is_default=False
+                )
+                loaded_quizzes.append(loaded_quiz)
+                seen_ids.add(quiz_id)
+            high_score = state["high_score"]
+            if high_score is not None and (
+                type(high_score) is not int or high_score < 0
+            ):
+                raise ValueError("최고 점수 데이터가 올바르지 않습니다.")
+            play_history = state["play_history"]
+            if not isinstance(play_history, list):
+                raise ValueError("플레이 기록은 목록이어야 합니다.")
+            required_record_keys = {
+                "played_at", "question_count", "correct_count",
+                "total_points", "question_results"
+            }
+            required_result_keys = {
+                "quiz_id", "question", "selected_answer",
+                "correct_answer", "is_correct", "hints_used", "points"
+            }
+            for record in play_history:
+                if (
+                    not isinstance(record, dict)
+                    or not required_record_keys.issubset(record)
+                ):
+                    raise ValueError("플레이 기록의 구조가 올바르지 않습니다.")
+
+                if (
+                    not isinstance(record["played_at"], str)
+                    or not record["played_at"].strip()
+                ):
+                    raise ValueError("플레이 날짜가 올바르지 않습니다.")
+                question_count = record["question_count"]
+                correct_count = record["correct_count"]
+                total_points = record["total_points"]
+                question_results = record["question_results"]
+                if type(question_count) is not int or question_count < 1:
+                    raise ValueError("플레이 문제 수가 올바르지 않습니다.")
+                if (
+                    type(correct_count) is not int
+                    or not 0 <= correct_count <= question_count
+                ):
+                    raise ValueError("정답 개수가 올바르지 않습니다.")
+                if type(total_points) is not int or total_points < 0:
+                    raise ValueError("플레이 점수가 올바르지 않습니다.")
+                if (
+                    not isinstance(question_results, list)
+                    or len(question_results) != question_count
+                    or any(
+                        not isinstance(result, dict)
+                        or not required_result_keys.issubset(result)
+                        for result in question_results
+                    )
+                ):
+                    raise ValueError("문제별 플레이 기록이 올바르지 않습니다.")
+                for item in question_results:
+                    quiz_id = item["quiz_id"]
+                    question = item["question"]
+                    selected = item["selected_answer"]
+                    answer = item["correct_answer"]
+                    correct = item["is_correct"]
+                    hints = item["hints_used"]
+                    points = item["points"]
+                    if (
+                        not isinstance(quiz_id, str) or not quiz_id.strip()
+                        or not isinstance(question, str) or not question.strip()
+                    ):
+                        raise ValueError("문제 ID 또는 내용이 올바르지 않습니다.")
+                    if (
+                        type(selected) is not int or not 1 <= selected <= 4
+                        or type(answer) is not int or not 1 <= answer <= 4
+                        or type(correct) is not bool
+                        or correct != (selected == answer)
+                        or type(hints) is not int or not 0 <= hints <= 2
+                        or type(points) is not int
+                        or points != (10 - 2 * hints if correct else 0)
+                    ):
+                        raise ValueError("문제별 플레이 기록의 값이 올바르지 않습니다.")
+                if correct_count != sum(
+                    item["is_correct"] for item in question_results
+                ):
+                    raise ValueError("전체 정답 개수가 일치하지 않습니다.")
+                if total_points != sum(
+                    item["points"] for item in question_results
+                ):
+                    raise ValueError("전체 점수가 일치하지 않습니다.")
+            next_user_quiz_id = state["next_user_quiz_id"]
+            if (
+                type(next_user_quiz_id) is not int
+                or next_user_quiz_id < 1
+                or any(
+                    next_user_quiz_id <= int(quiz.id[5:])
+                    for quiz in loaded_quizzes
+                )
+            ):
+                raise ValueError("다음 사용자 문제 번호가 올바르지 않습니다.")
+        except (OSError, UnicodeError, json.JSONDecodeError,
+                KeyError, TypeError, ValueError) as error:
+            print(f"게임 데이터를 불러오지 못했습니다: {error}")
+            return False
+        self.quizzes = create_default_quizzes() + loaded_quizzes
+        self.high_score = high_score
+        self.play_history = play_history
+        self.next_user_quiz_id = next_user_quiz_id
+        print("저장된 게임 데이터를 불러왔습니다.")
+        return True
 
 
     def run(self):
