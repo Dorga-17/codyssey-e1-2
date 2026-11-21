@@ -2,6 +2,7 @@
 
 
 import random
+from datetime import datetime
 from default_quizzes import create_default_quizzes
 
 
@@ -126,12 +127,54 @@ class QuizGame:
         print(f"푼 문제 수 : {count}개")
         print(f"맞힌 문제 수 : {correct_count}개")
         print(f"총점 : {total_points}점 / {count * 10}점")
-        return {
+        result = {
             "question_count": count,
             "correct_count": correct_count,
             "total_points": total_points,
             "question_results": question_results
         }
+        self.record_play_result(result)
+        return result
+
+
+    def record_play_result(self, result):
+        """완료한 플레이를 기록하고 최고 점수를 갱신한다."""
+        play_record = {
+            "played_at": datetime.now().astimezone().isoformat(timespec="seconds"),
+            "question_count": result["question_count"],
+            "correct_count": result["correct_count"],
+            "total_points":result["total_points"],
+            "question_results": result["question_results"]
+        }
+        self.play_history.append(play_record)
+        if self.high_score is None or play_record["total_points"] > self.high_score:
+            self.high_score = play_record["total_points"]
+        return play_record
+
+
+    def show_score_history(self):
+        """최고 점수와 전체 플레이 기록을 출력한다."""
+        print("\n===== 최고 점수 및 플레이 기록 =====")
+        if self.high_score is None:
+            print("최고 점수 : 아직 기록이 없습니다.")
+        else:
+            print(f"최고 점수 : {self.high_score}점")
+        if not self.play_history:
+            print("플레이 기록이 없습니다.")
+            return
+        print(f"전체 플레이 횟수 : {len(self.play_history)}회")
+        for index, record in enumerate(self.play_history, start=1):
+            print(f"\n[{index}회차] {record['played_at']}")
+            print(f"푼 문제 수 : {record['question_count']}개")
+            print(f"맞힌 문제 수 : {record['correct_count']}개")
+            print(f"총점 : {record['total_points']}점")
+            for number, item in enumerate(record["question_results"], start=1):
+                result_text = "정답" if item["is_correct"] else "오답"
+                print(f"  {number}번 문제 [{result_text}] : {item['question']}")
+                print(f"    선택한 답 : {item['selected_answer']}번")
+                print(f"    실제 정답 : {item['correct_answer']}번")
+                print(f"    힌트 사용 : {item['hints_used']}개")
+                print(f"    획득 점수 : {item['points']}점")
 
 
     def run(self):
@@ -143,6 +186,12 @@ class QuizGame:
                 print("입력이 중단되어 게임을 종료합니다.")
                 print("현재 저장 기능은 아직 구현되지 않았습니다.")
                 return
+            if choice == 1:
+                self.play_quiz()
+                continue
+            if choice == 4:
+                self.show_score_history()
+                continue
             if choice == 5:
                 print("현재 저장 기능은 아직 구현되지 않았습니다.")
                 print("게임을 종료합니다.")
