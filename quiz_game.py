@@ -4,6 +4,7 @@
 import random
 from datetime import datetime
 from default_quizzes import create_default_quizzes
+from quiz import Quiz
 
 
 class QuizGame:
@@ -13,6 +14,7 @@ class QuizGame:
         self.quizzes = create_default_quizzes()
         self.high_score = None
         self.play_history = []
+        self.next_user_quiz_id = 1
 
 
     def show_menu(self):
@@ -46,6 +48,121 @@ class QuizGame:
                 print(f"{min_value}에서 {max_value}까지의 숫자를 입력해 주세요.")
                 continue
             return number
+
+
+    def get_required_text(self, prompt):
+        """공백이 아닌 문자열을 안전하게 입력받는다."""
+        while True:
+            try:
+                text = input(prompt).strip()
+            except (KeyboardInterrupt, EOFError):
+                print("\n입력이 중단되었습니다.")
+                return None
+            if not text:
+                print("내용을 입력해 주세요.")
+                continue
+            return text
+
+
+    def add_quiz(self):
+        """사용자가 입력한 문제를 새로운 퀴즈로 등록한다."""
+        print("\n===== 퀴즈 추가 =====")
+        question = self.get_required_text("문제 내용 : ")
+        if question is None:
+            print("퀴즈 추가를 취소했습니다.")
+            return None
+        choices = []
+        for number in range(1, 5):
+            choice = self.get_required_text(f"{number}번 선택지 : ")
+            if choice is None:
+                print("퀴즈 추가를 취소했습니다.")
+                return None
+            choices.append(choice)
+        answer = self.get_valid_input("정답 번호(1-4) : ", 1, 4)
+        if answer is None:
+            print("퀴즈 추가를 취소했습니다.")
+            return None
+        hints = []
+        print("힌트는 최대 2개까지 입력할 수 있습니다.")
+        print("힌트를 생략하려면 Enter를 누르세요.")
+        for number in range(1, 3):
+            try:
+                hint = input(f"{number}번 힌트 : ").strip()
+            except (KeyboardInterrupt, EOFError):
+                print("\n입력이 중단되어 퀴즈 추가를 취소했습니다.")
+                return None
+            if not hint:
+                break
+            hints.append(hint)
+        while any(
+            quiz.id == f"user-{self.next_user_quiz_id}"
+            for quiz in self.quizzes
+        ):
+            self.next_user_quiz_id += 1
+        quiz_id = f"user-{self.next_user_quiz_id}"
+        new_quiz = Quiz(
+            quiz_id,
+            question,
+            choices,
+            answer,
+            hints=hints,
+            is_default=False
+        )
+        self.quizzes.append(new_quiz)
+        self.next_user_quiz_id += 1
+        print(f"퀴즈가 추가되었습니다. (ID : {quiz_id})")
+        return new_quiz
+
+
+    def show_quiz_list(self):
+        """기본 제공 문제와 사용자 추가 문제를 모두 출력한다."""
+        print("\n===== 전체 퀴즈 목록 =====")
+        if not self.quizzes:
+            print("등록된 퀴즈가 없습니다.")
+            return
+        default_count = sum(quiz.is_default for quiz in self.quizzes)
+        user_count = len(self.quizzes) - default_count
+
+        print(f"전체 문제 수 : {len(self.quizzes)}개")
+        print(f"기본 제공 문제 : {default_count}개")
+        print(f"사용자 추가 문제 : {user_count}개")
+        for number, quiz in enumerate(self.quizzes, start=1):
+            if quiz.is_default:
+                quiz_type = "기본 제공 / 삭제 불가"
+            else:
+                quiz_type = "사용자 추가 / 삭제 가능"
+            print(f"\n[{number}] ID : {quiz.id}")
+            print(f"문제 유형 : {quiz_type}")
+            quiz.display()
+            print(f"정답 : {quiz.answer}번")
+            if quiz.hints:
+                for hint_number, hint in enumerate(quiz.hints, start=1):
+                    print(f"힌트 {hint_number} : {hint}")
+            else:
+                print("힌트 : 없음")
+
+
+    def delete_quiz(self):
+        """사용자가 추가한 퀴즈만 삭제한다."""
+        if not self.quizzes:
+            print("삭제할 퀴즈가 없습니다.")
+            return False
+        self.show_quiz_list()
+        number = self.get_valid_input(
+            f"삭제할 문제 번호(1-{len(self.quizzes)}, 0 : 취소) : ",
+            0,
+            len(self.quizzes)
+        )
+        if number is None or number == 0:
+            print("퀴즈 삭제를 취소했습니다.")
+            return False
+        selected_quiz = self.quizzes[number - 1]
+        if selected_quiz.is_default:
+            print("기본 제공 문제는 삭제할 수 없습니다.")
+            return False
+        deleted_quiz = self.quizzes.pop(number - 1)
+        print(f"퀴즈가 삭제되었습니다. (ID : {deleted_quiz.id})")
+        return True
 
 
     def select_question_count(self):
@@ -188,6 +305,12 @@ class QuizGame:
                 return
             if choice == 1:
                 self.play_quiz()
+                continue
+            if choice == 2:
+                self.add_quiz()
+                continue
+            if choice == 3:
+                self.delete_quiz()
                 continue
             if choice == 4:
                 self.show_score_history()
